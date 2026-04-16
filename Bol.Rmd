@@ -1,0 +1,59 @@
+---
+title: "Flight delay"
+author: "Boluwatife Farombi"
+date: "2026-02-23"
+output: html_document
+---
+
+```{r}
+library(readr)
+nycflights13 <- read_csv("Data/nycflights13.csv")
+nycflights13
+```
+
+
+```{r}
+library(dplyr)
+flights<- nycflights13 %>%
+  select(hour, dep_delay) %>%
+  filter(!is.na(dep_delay))
+flights
+```
+checking delay time by hour 
+```{r}
+delay_flight <- flights %>%
+  group_by(hour) %>%
+  summarise(delay = mean(dep_delay))
+delay_flight
+```
+
+to visualize the data 
+```{r}
+library(ggplot2)
+gplot <- ggplot(delay_flight, aes(x = hour, y = delay)) +
+  geom_point()+
+  geom_line() +
+  labs(
+    title = "Average Departure Delay by Hour of the Day",
+    x = "Hour",
+    y = "Average Delay"
+)
+gplot 
+```
+Average departure delays are at their lowest in the mornings.They then gradually 
+rise throughout the day, peaking in the evening. This suggests that planes 
+leaving later in the day are more likely to be delayed. On the other hand, 
+flights in the morning are typically on time, indicating that delays build up 
+over the day and affect later departures.
+  
+Are the delay consistent or unpredictable ?
+```{r}
+del <- flights %>%
+  group_by(hour) %>%
+  summarise (
+    mean_del = mean(dep_delay),
+    sd_del = sd(dep_delay)
+  )
+del
+```
+From the result we can see that the variability of delay increases throughout the day, as shown by the rising standard deviation. This indicates that the evening flight are not only more delayed on average but they are also less predictable compared to the morning flights.
