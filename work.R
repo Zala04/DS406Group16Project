@@ -101,7 +101,7 @@ anova(fit8, fit12) # insignificant so carrier doen't matter
 ## Fit 8 is best
 
 ## Run this to see if type is a valid predictor
-fit13 <- glm(is_late ~ tailnum+sched_dep_time+month+dest+day+distance +year.x+carrier+type, family = "binomial", data = merged_df)
+fit13 <- glm(is_late ~ tailnum+sched_dep_time+month+dest+day+distance +year.x+type, family = "binomial", data = merged_df)
 summary_fit13 <- summary(fit13)
 
 ## If p-value is significant then type is a good predictor
