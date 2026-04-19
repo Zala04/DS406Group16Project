@@ -96,3 +96,13 @@ plt.xlabel("Precipitation (inches/hour)")
 plt.ylabel("Departure Delay (minutes)")
 plt.title("Impact of Precipitation on Flight Delays")
 plt.show()
+
+#boxplot  -> check difference when percipitation vs not not the effect of percipitation if its more intense
+df['precPresent'] = (df['precip'] > 0)
+df.boxplot(column='dep_delay', by='precPresent')
+plt.xticks([1,2], ['No Precipitation', 'Precipitation'])
+plt.ylabel("Departure Delay")
+plt.title("Effect of Precipitation on flight delays")
+plt.suptitle("")
+plt.ylim(-20, 100)
+plt.show()
