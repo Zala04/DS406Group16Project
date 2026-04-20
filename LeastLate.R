@@ -108,3 +108,13 @@ ggplot((f2), aes(x = carrier, fill = Status)) +
   ggtitle("Number of flights by carrier with delayed proportion") +
   xlab("Carrier") +
   ylab("Count") + ylim(0,62000)
+
+
+
+###
+f3 <- flights2 %>% group_by(carrier) %>%
+  summarise(lateDelayedFlights= sum(dep_delay>=15),flightsThatMadeUpTime = sum(dep_delay>=15 & arr_delay<=15, na.rm = TRUE),
+            propOfMakingUpTime = flightsThatMadeUpTime / sum(dep_delay>=15, na.rm = TRUE), meanDelayInMinutes = mean(dep_delay[dep_delay >= 15]))
+f3
+full_f <- left_join(x,f3)
+full_f %>% arrange(desc(propOfMakingUpTime)) %>% filter(n>500)
