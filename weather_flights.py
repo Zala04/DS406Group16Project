@@ -14,7 +14,7 @@ weather = pd.read_csv(weather_url)
 if 'Unnamed: 0' in flights.columns:
     flights = flights.drop(columns=['Unnamed: 0'])
 
-# 1. Prepare and merge the datasets just like before
+# 1. Prepare and merge the datasets
 df = pd.merge(flights, weather, 
               on=['origin', 'year', 'month', 'day', 'hour'], 
               how='inner')
@@ -37,7 +37,7 @@ def BootstrapRelChange(X, Y):
     return (Yb.mean() / Xb.mean()) - 1.0
 
 # Run the bootstrap for 10,000 iterations
-BS_ITER = int(100)
+BS_ITER = int(1e4)
 Db = np.repeat(0.0, BS_ITER)
 Rb = np.repeat(0.0, BS_ITER)
 
@@ -55,44 +55,51 @@ print("Absolute Change 95% CI:", np.quantile(Db, [0.025, 0.975]))
 print(f"Relative Change Point Estimate: {R_mean:.2%}")
 print("Relative Change 95% CI:", np.quantile(Rb, [0.025, 0.975]))
 
-# 1. Isolate precipitation and departure delays, dropping missing values
-df2 = df[['precip', 'dep_delay']].dropna()
+# Define the airports and assign a distinct, visually appealing color to each
+airports = ['EWR', 'JFK', 'LGA']
+color_map = {'EWR': '#1f77b4',  # Blue
+             'JFK': '#ff7f0e',  # Orange
+             'LGA': '#2ca02c'}  # Green
 
-# 2. Filter the data
-# Let's focus on instances where there was actually some precipitation to see its effect
-# and remove extreme outliers (e.g., > 1 inch per hour) to avoid skewed results
-df2 = df2[(df2['precip'] > 0) & (df2['precip'] <= 1.0)]
+data_to_plot = []
+labels = []
+box_colors = []
 
-x = df2['precip']
-y = df2['dep_delay']
+# 1. First gather all "No Precipitation" data
+for airport in airports:
+    no_precip = df.loc[(df['origin'] == airport) & (df['precip'] == 0), 'dep_delay'].dropna()
+    data_to_plot.append(no_precip)
+    labels.append(f"{airport}\nNo Precip")
+    box_colors.append(color_map[airport])
 
-# 3. Fit the linear regression model
-mod2 = stats.linregress(x, y)
-print(mod2)
+# 2. Then gather all "Precipitation" data
+for airport in airports:
+    precip = df.loc[(df['origin'] == airport) & (df['precip'] > 0), 'dep_delay'].dropna()
+    data_to_plot.append(precip)
+    labels.append(f"{airport}\nPrecip")
+    box_colors.append(color_map[airport])
 
-# 4. Calculate 95% confidence intervals for the slope and intercept
-tinv = lambda p, dfree: abs(stats.t.ppf(p/2, dfree))
-ts = tinv(0.05, len(x)-2)
+# Generate the plot
+plt.figure(figsize=(10, 6))
 
-print(f"slope (95%): {mod2.slope:.4f} +/- {ts*mod2.stderr:.4f}")
-print(f"intercept (95%): {mod2.intercept:.4f} +/- {ts*mod2.intercept_stderr:.4f}")
+# Create the boxplot, enabling patch_artist to fill the boxes with color
+bplot = plt.boxplot(data_to_plot, labels=labels, showfliers=False, patch_artist=True,
+                    medianprops=dict(color='firebrick', linewidth=2),
+                    whiskerprops=dict(color='black', linewidth=1.5),
+                    capprops=dict(color='black', linewidth=1.5))
 
-# 5. Save the regression results to CSV
-results_precip = pd.DataFrame({
-    'Metric': ['Slope', 'Intercept', 'R-squared', 'P-value', 'Std Error'],
-    'Value': [mod2.slope, mod2.intercept, mod2.rvalue**2, mod2.pvalue, mod2.stderr]
-})
-results_precip.to_csv("precip_regression_results.csv", index=False)
+# Apply the mapped colors to the boxes with slight transparency
+for patch, color in zip(bplot['boxes'], box_colors):
+    patch.set_facecolor(color)
+    patch.set_alpha(0.7)
 
-print("Data successfully saved to 'precip_regression_results.csv'")
+# Add a vertical line exactly in the middle (between x=3 and x=4) to separate the weather groups
+plt.axvline(x=3.5, color='gray', linestyle='--', linewidth=2, alpha=0.7)
 
-# 6. Generate the scatter plot
-plt.scatter(x, y, label='original data', alpha=0.3)
-plt.plot([x.min(), x.max()], 
-         [mod2.intercept + mod2.slope * x.min(), mod2.intercept + mod2.slope * x.max()], 
-         'r', label='fitted line', linewidth=3)
-plt.legend()
-plt.xlabel("Precipitation (inches/hour)")
-plt.ylabel("Departure Delay (minutes)")
-plt.title("Impact of Precipitation on Flight Delays")
+# Styling and labels
+plt.ylabel("Departure Delay (minutes)", fontsize=12)
+plt.title("Effect of Precipitation on Flight Delays by Airport (Outliers Excluded)", fontsize=14, pad=15)
+plt.grid(axis='y', linestyle=':', alpha=0.7)
+
+plt.tight_layout()
 plt.show()
