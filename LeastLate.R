@@ -3,36 +3,37 @@ nycflights13 <- read.csv("Data/nycflights13.csv")
 library(tidyverse)
 library(dplyr)
 library(viridis)
+library(dplyr)
+library(lubridate)
 
 colnames(nycflights13)
 colnames(nycflights13)
-f1 <- nycflights13 |>
-  group_by(carrier) |>
-  summarise(proportionDelay = mean(dep_delay >= 15 | arr_delay >= 15, na.rm = TRUE),
-            n = n(), nOfDelayed = round(proportionDelay*n))
+f1 <- nycflights13 %>%
+  group_by(carrier) %>%
+  summarise(Count = n(),proportionDelay = mean(dep_delay >= 15 | arr_delay >= 15, na.rm = TRUE))
 f1
-x <- f1 |> group_by(carrier) |> arrange(desc(proportionDelay))
+x <- f1 |> group_by(carrier) %>% arrange(desc(proportionDelay)) %>% filter(Count>1000)
 x
 
 x$carrier <- factor(x$carrier, levels = x$carrier)
-ggplot(x, aes(x = carrier, y= proportionDelay, label = n))+ geom_col(aes(fill = n))  + coord_flip()+
+ggplot(x, aes(x = carrier, y= proportionDelay, label = Count))+ geom_col(aes(fill = n))  + coord_flip()+
+  geom_text(
+    aes(label = Count),
+    hjust = 0, col="red") + ylim(0,0.8) + ggtitle("Proportion delay by carrier with number of counts associated") +
+  scale_fill_viridis_b()
+
+
+ggplot(x, aes(x = carrier, y= proportionDelay, label = Count))+ geom_col(aes(fill = Count))  + coord_flip()+
   geom_text(
     aes(label = n),
     hjust = 0, col="red") + ylim(0,0.8) + ggtitle("Proportion delay by carrier with number of counts associated") +
   scale_fill_viridis_b()
 
 
-ggplot(x, aes(x = carrier, y= proportionDelay, label = n))+ geom_col(aes(fill = n))  + coord_flip()+
-  geom_text(
-    aes(label = n),
-    hjust = 0, col="red") + ylim(0,0.8) + ggtitle("Proportion delay by carrier with number of counts associated") +
-  scale_fill_viridis_b()
 
-
-
-flights2 <- nycflights13 |> filter(!is.na(dep_delay), !is.na(arr_delay)) |>
+flights2 <- nycflights13 %>% filter(!is.na(dep_delay), !is.na(arr_delay)) %>% group_by(carrier) %>% filter(n()>1000)
   mutate(delayed = as.numeric(dep_delay >= 15 | arr_delay >= 15), is_arr_delayed = as.numeric(arr_delay >= 15))
-flights2 <- flights2 |> mutate(combinesMinutes = hour*60+minute)
+flights2 <- flights2 %>% mutate(combinesMinutes = hour*60+minute)
 max(flights2$dep_delay)
 
 mod1 <- glm(delayed ~ dep_delay + carrier + origin + dest + distance + combinesMinutes,
@@ -63,6 +64,53 @@ binomial_smooth <- function(...) {
 # key plot as we figure out as dep_delay increases so does the probability of being late
 
 
+## joining data and glm
+me1 <- inner_join(
+  flights2, nycflights13::weather,
+  by = c("origin", "year", "month", "day", "hour"))
+colnames(me1)
+me1 <- me1 %>%
+  mutate(
+    delayed =  as.numeric(dep_delay >= 15 | arr_delay >= 15),
+    is_dep_delayed = if_else(dep_delay >= 15 | arr_delay >= 15, 1, 0))
+
+me1_model <- me1 %>% filter(!is.na(dep_delay), !is.na(arr_delay))
+me1$sched_dep_time
+fit <- glm(
+  delayed ~ dest + carrier + air_time + precip + temp + humid +
+    wind_speed + visib + sched_dep_time+origin,
+  data = me1_model,
+  family = binomial()
+)
+jtools::summ(fit)
+summary(fit)
+
+fit1 <- glm(
+  arr_delay ~ dest + carrier + air_time + precip + temp + humid +
+    wind_speed + visib + combinesMinutes,
+  data = me1_model,
+  family = gaussian()
+)
+summary(fit1)
+
+fit2 <- glm(
+  is_dep_delayed ~ dest + origin + carrier + air_time + precip + temp + humid +
+    wind_speed + visib + hour,
+  data = me1_model,
+  family = binomial()
+)
+summary(fit2)
+
+
+fit3 <- lm(delayed ~
+             dest + carrier + air_time + precip + temp + humid +
+             wind_speed + visib + hour,
+           data = me1_model,)
+summary(fit3)
+
+
+##
+
 
 ggplot(flights2, aes((dep_delay), is_arr_delayed)) +
   geom_jitter(height = 0.05, alpha = 0.025) +
@@ -74,6 +122,9 @@ ggplot(flights2, aes((dep_delay), is_arr_delayed)) +
   coord_cartesian(xlim = c(0, 300)) # needed so geom smooth uses full data
 # large departure delays perfectly predict arrival delay so warnings
 
+
+
+# barplot for carrier
 
 f2 <- (flights2) %>%
   mutate(
@@ -90,31 +141,36 @@ newlabel <- f2 %>%
     n = n()
   )
 
-ggplot((f2), aes(x = carrier, fill = Status)) +
-  geom_bar() +
+
+ggplot(f2, aes(x = carrier, fill = Status)) +
+  geom_bar(colour="black") +
   coord_flip() +
-  geom_text(
-    data = newlabel,
-    aes(x = carrier, y = n,
-      label = scales::percent(proportionDelay),
-      color = "Proportion Delayed"),
+  geom_text(data = newlabel,
+    aes(x = carrier,
+        y = n,
+      label = scales::percent(proportionDelay)),
+      colour = "black",
     inherit.aes = FALSE,
-    hjust = -0.15,
-    size = 4
-  ) +
-  scale_color_manual(
-    name="Percentage",
-    values = c("Proportion Delayed" = "black")) +
+    hjust = -0.05,
+    size = 3)+
   ggtitle("Number of flights by carrier with delayed proportion") +
   xlab("Carrier") +
-  ylab("Count") + ylim(0,62000)
+  ylab("Count") + ylim(0,64000)
 
+# carriers that had less than 1000 flights were omitted so we have stable estimates
 
 
 ###
 f3 <- flights2 %>% group_by(carrier) %>%
-  summarise(lateDelayedFlights= sum(dep_delay>=15),flightsThatMadeUpTime = sum(dep_delay>=15 & arr_delay<=15, na.rm = TRUE),
+  summarise(lateDepartedFlights= sum(dep_delay>=15),flightsThatMadeUpTime = sum(dep_delay>=15 & arr_delay<=15, na.rm = TRUE),
             propOfMakingUpTime = flightsThatMadeUpTime / sum(dep_delay>=15, na.rm = TRUE), meanDelayInMinutes = mean(dep_delay[dep_delay >= 15]))
 f3
 full_f <- left_join(x,f3)
-full_f %>% arrange(desc(propOfMakingUpTime)) %>% filter(n>500)
+d <- full_f %>% filter(lateDepartedFlights>1000) %>% arrange(desc(propOfMakingUpTime))
+d
+
+
+
+flightsMissingessTrial <- nycflights13 %>% select(c("sched_dep_time", "dep_delay", "arr_time",
+                                                  "sched_arr_time","arr_delay")) %>% filter(n()>1000)
+
